@@ -1,0 +1,35 @@
+# rentlyClaudeNote — turees «Claude ажил» цонхны ажлуудыг Claude Code-оор гүйцэтгэгч.
+# Энэ файлыг rentlyClaudeNote.exe-ийн хажууд config.toml нэрээр хуулж бөглөнө
+# (config.toml нь .gitignore-д орсон).
+
+# /claudeAjil route-ийг deploy хийсэн backend (turees frontend services/uilchilgee.js-ийн url)
+url = "https://rently.zevtabs.mn/api"
+
+# /claudeAjil endpoint-ууд Zevtabs байгууллагын CAdmin1 эрх шаарддаг (tokenShalgakh + adminShalgay).
+# Бэлэн JWT өгөх, эсвэл нэвтрэх нэр/нууц үгээр автоматаар token авна.
+# Token-ий хугацаа дуусахад (401) нэвтрэх нэр/нууц үг байвал дахин нэвтэрнэ.
+token = ""
+nevtrekhNer = "CAdmin1"
+nuutsUg = ""
+baiguullagiinId = "612f457d185280db676d0b51"
+
+# Хүлээгдэж буй (shine) ажлыг хэдэн секунд тутамд шалгах
+shalgakh_secs = 60
+timeout_secs = 20
+
+# Цонхонд сонгосон repo нэр → энэ компьютер дээрх зам.
+# Энд байхгүй repo сонгосон ажил алдаатай дуусна.
+[repos]
+tureesBack = "D:/Work/tureesBack"
+turees = "D:/Work/turees"
+parking-v2 = "D:/Work/parking-v2"
+quickqpaypackv2 = "D:/Work/quickqpaypackv2"
+
+[claude]
+exe = "C:/Users/pc/.local/bin/claude.exe"
+budget_usd = 5.0        # нэг ажлын зардлын дээд хязгаар
+timeout_min = 60
+model = ""              # хоосон бол Claude Code-ийн анхдагч загвар
+# false бол commit хийгдээгүй өөрчлөлттэй repo-д ажиллахгүй (таны ажлыг хамгаална).
+# true бол тухайн өөрчлөлтийн дээр нэмж засна — зөвхөн өөрийн компьютер дээр.
+bokhir_repo_zuvshuurukh = false
