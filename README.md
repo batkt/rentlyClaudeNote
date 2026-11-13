@@ -33,6 +33,10 @@
 
 `bokhir_repo_zuvshuurukh = false` (анхдагч) үед сонгосон repo-д commit хийгдээгүй өөрчлөлт байвал Claude ажиллуулахгүй, ажил `aldaa` болно — commit хийгээд «Дахин ажиллуулах».
 
+`git_pull = true` (анхдагч) үед ажил эхлэхийн өмнө **service өөрөө** repo бүрт `git pull --ff-only` хийнэ — Claude хамгийн сүүлийн код дээр ажиллаж, дараа нь таны `git pull` merge зөрчилтэй болохоос сэргийлнэ. Цэвэр repo-г шинэчилж чадаагүй бол (сүлжээ, салаалсан local commit) ажил `aldaa` болно. Өмнөх ээлжийн commit хийгдээгүй өөрчлөлттэй repo-д pull зөрчилтэй бол git юу ч өөрчлөхгүй тул ⚠ анхааруулаад үргэлжлүүлнэ. Upstream-гүй branch-ийг алгасна. Claude-д `git pull` эрх өгөхгүй (ажлын дунд код солигдохгүй).
+
+`--add-dir` repo-уудын `CLAUDE.md` ч ачаалагдана (`CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`).
+
 ## Claude-ийн хамгаалалт
 
 autolog-тэй ижил: Read/Glob/Grep/Edit/Write, `git status/diff/log/show`, `node --test/--check`, `npm test`, `npm run lint/build`, `npx tsc/eslint` зөвшөөрөгдсөн. Хориотой: `git commit/push/reset/checkout/restore/clean/stash/rebase/merge`, `npm install/publish`, `pm2`, WebFetch/WebSearch. `--max-budget-usd`, `timeout_min`. Өөрчлөлт зөвхөн working tree-д үлдэнэ — өөрөө хянаж commit эсвэл буцаана.
