@@ -828,6 +828,11 @@ impl App {
             ));
         }
 
+        let shalgalt_dir = match claude::shalgalt_beltgey(&ajil_dir) {
+            Ok(z) => z,
+            Err(e) => return Err((e, g)),
+        };
+
         // Claude эхлэхээс өмнөх commit хийгдээгүй өөрчлөлтийн тамга — ажлын
         // дараа хэрэглэгчийн урьдчилан байсан өөрчлөлтийг zasvarlasan-аас ялгана
         let mut umnu_tamga = Vec::with_capacity(repos.len());
@@ -853,6 +858,7 @@ impl App {
                 nemelt_zaavar: str_of(ajil, "nemeltZaavar"),
                 tuukh: &tuukh,
                 umnukh_uurchlult: &umnukh_uurchlult,
+                shalgalt_dir: &shalgalt_dir,
             },
             &bokhir,
         );

@@ -40,7 +40,9 @@ repo_undsen = "D:/Work"
 exe = "C:/Users/pc/.local/bin/claude.exe"
 budget_usd = 5.0        # нэг ажлын зардлын дээд хязгаар
 timeout_min = 60
-model = ""              # хоосон бол Claude Code-ийн анхдагч загвар
+# VS Code-ийн Claude-тай ижил чанартай байхын тулд opus. Хоосон бол Claude Code-ийн
+# headless анхдагч загвар (Sonnet) ажиллана.
+model = "opus"
 # false бол commit хийгдээгүй өөрчлөлттэй repo-д ажиллахгүй (таны ажлыг хамгаална).
 # true бол тухайн өөрчлөлтийн дээр нэмж засна — зөвхөн өөрийн компьютер дээр.
 bokhir_repo_zuvshuurukh = false

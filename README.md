@@ -39,9 +39,13 @@
 
 ## Claude-ийн хамгаалалт
 
-autolog-тэй ижил: Read/Glob/Grep/Edit/Write, `git status/diff/log/show`, `node --test/--check`, `npm test`, `npm run lint/build`, `npx tsc/eslint` зөвшөөрөгдсөн. Хориотой: `git commit/push/reset/checkout/restore/clean/stash/rebase/merge`, `npm install/publish`, `pm2`, WebFetch/WebSearch. `--max-budget-usd`, `timeout_min`. Өөрчлөлт зөвхөн working tree-д үлдэнэ — өөрөө хянаж commit эсвэл буцаана.
+Read/Glob/Grep/Edit/Write, `git status/diff/log/show` (`git -C <repo>` хэлбэрээр ч), `node --test/--check`, `npm test`, `npm run lint/build`, `npx tsc/eslint` зөвшөөрөгдсөн. Хориотой: `git commit/push/pull/reset/checkout/switch/restore/clean/stash/rebase/merge/revert/cherry-pick/am/apply/config`, `npm install/publish`, `pm2`, WebFetch/WebSearch. `--max-budget-usd`, `timeout_min`. Өөрчлөлт зөвхөн working tree-д үлдэнэ — өөрөө хянаж commit эсвэл буцаана.
 
-`data/<ajilId>/` дотор `prompt.md`, татсан зургууд, `claude.jsonl` (бүх stream event — аудит) хадгалагдана.
+## Дизайныг зурагтай харьцуулах
+
+Ажил бүрт `data/<ajilId>/shalgalt/` хавтас үүсэж, дотор нь `zuragBolgokh.mjs` туслах бичигдэнэ. Claude зөвхөн энэ хавтсан дахь script-ээ `node`-оор ажиллуулж, үр дүнг Edge/Chrome-оор PNG болгоод хавсаргасан загвар зурагтай таартал харьцуулна. Анхдагч загвар нь `opus` (`[claude] model`).
+
+`data/<ajilId>/` дотор `prompt.md`, татсан зургууд, `shalgalt/`, `claude.jsonl` (бүх stream event — аудит) хадгалагдана.
 
 ## Ашиглах
 

@@ -34,21 +34,60 @@ const ZUVSHUURUL: &[&str] = &[
 ];
 
 const KHORIG: &[&str] = &[
-    "Bash(git commit:*)",
-    "Bash(git push:*)",
-    "Bash(git reset:*)",
-    "Bash(git checkout:*)",
-    "Bash(git restore:*)",
-    "Bash(git clean:*)",
-    "Bash(git stash:*)",
-    "Bash(git rebase:*)",
-    "Bash(git merge:*)",
     "Bash(npm install:*)",
     "Bash(npm publish:*)",
     "Bash(pm2:*)",
     "WebFetch",
     "WebSearch",
 ];
+
+/// Бусад repo-г `git -C <зам> ...`-ээр зөвхөн уншина (cwd нь эхний repo).
+const GIT_UNSHIKH: &[&str] = &["status", "diff", "log", "show"];
+
+/// `git <команд>` ба `git -C <зам> <команд>` хоёуланд нь хориотой.
+const GIT_KHORIG: &[&str] = &[
+    "commit", "push", "pull", "reset", "checkout", "switch", "restore", "clean", "stash", "rebase",
+    "merge", "revert", "cherry-pick", "am", "apply", "config",
+];
+
+/// Ажлын shalgalt/ хавтсанд Claude-ийн бичсэн туршилтын script-ийг л ажиллуулах эрх.
+fn zuvshuurul_jagsaalt(shalgalt_dir: &str) -> Vec<String> {
+    let mut v: Vec<String> = ZUVSHUURUL.iter().map(|s| s.to_string()).collect();
+    for k in GIT_UNSHIKH {
+        v.push(format!("Bash(git -C * {k})"));
+        v.push(format!("Bash(git -C * {k} *)"));
+    }
+    v.push(format!("Bash(node {shalgalt_dir}/*)"));
+    v
+}
+
+fn khorig_jagsaalt() -> Vec<String> {
+    let mut v: Vec<String> = KHORIG.iter().map(|s| s.to_string()).collect();
+    for k in GIT_KHORIG {
+        v.push(format!("Bash(git {k}:*)"));
+        v.push(format!("Bash(git -C * {k})"));
+        v.push(format!("Bash(git -C * {k} *)"));
+    }
+    v
+}
+
+const ZURAG_BOLGOKH_JS: &str = include_str!("zuragBolgokh.mjs");
+
+/// Ажлын туршилтын хавтсын үнэмлэхүй зам (`/` тусгаарлагчтай — эрхийн дүрэм, prompt-д ижил).
+fn shalgalt_zam(ajil_dir: &Path) -> Result<String, String> {
+    let zam = std::path::absolute(ajil_dir.join("shalgalt"))
+        .map_err(|e| format!("{}: {e}", ajil_dir.display()))?;
+    Ok(zam.display().to_string().replace('\\', "/"))
+}
+
+/// shalgalt/ хавтас, зураг гаргах туслахыг бэлдэж хавтсын замыг буцаана.
+pub fn shalgalt_beltgey(ajil_dir: &Path) -> Result<String, String> {
+    let zam = shalgalt_zam(ajil_dir)?;
+    std::fs::create_dir_all(&zam).map_err(|e| format!("{zam}: {e}"))?;
+    std::fs::write(format!("{zam}/zuragBolgokh.mjs"), ZURAG_BOLGOKH_JS)
+        .map_err(|e| format!("{zam}/zuragBolgokh.mjs: {e}"))?;
+    Ok(zam)
+}
 
 #[derive(Deserialize, Clone)]
 pub struct ClaudeTokhirgoo {
@@ -58,7 +97,8 @@ pub struct ClaudeTokhirgoo {
     pub budget_usd: f64,
     #[serde(default = "default_timeout")]
     pub timeout_min: u64,
-    #[serde(default)]
+    /// Хоосон бол Claude Code-ийн анхдагч загвар (headless горимд Sonnet)
+    #[serde(default = "default_model")]
     pub model: String,
     #[serde(default)]
     pub bokhir_repo_zuvshuurukh: bool,
@@ -74,7 +114,7 @@ impl Default for ClaudeTokhirgoo {
             exe: default_exe(),
             budget_usd: default_budget(),
             timeout_min: default_timeout(),
-            model: String::new(),
+            model: default_model(),
             bokhir_repo_zuvshuurukh: false,
             git_pull: true,
         }
@@ -87,6 +127,9 @@ fn default_true() -> bool {
 
 fn default_exe() -> String {
     "claude".into()
+}
+fn default_model() -> String {
+    "opus".into()
 }
 fn default_budget() -> f64 {
     5.0
@@ -113,6 +156,31 @@ pub struct Ajil<'a> {
     pub tuukh: &'a [UmnukhEelj],
     /// Өмнөх ээлжийн Claude-ийн commit хийгдээгүй өөрчлөлттэй repo-ууд
     pub umnukh_uurchlult: &'a [String],
+    /// Туршилтын script, зураг гаргах хавтас (`shalgalt_beltgey`)
+    pub shalgalt_dir: &'a str,
+}
+
+/// Үр дүнг зураг болгож нүдээр шалгах журам. Загвар зураг хавсаргасан бол түүнтэй
+/// таартал давтана — кодыг уншаад «таарсан» гэж дүгнэхээс сэргийлнэ.
+fn kharagdakh_khesg(a: &Ajil) -> String {
+    let dir = a.shalgalt_dir;
+    let kharitsuulakh = if a.zurguud.is_empty() {
+        String::new()
+    } else {
+        "5. Хавсаргасан загвар зурагтай хэсэг хэсгээр нь харьцуул: өнгө, фонт, үсгийн хэмжээ, зай, хүрээ, баганын өргөн, зэрэгцүүлэлт, текст. Туршилтын өгөгдөлд зураг дээрх бодит утгуудыг ашигла. Зөрүү бүрийг засаад зургаа дахин гаргаж, таартал давт.\n\nЗагвар зураг бол дизайны гол эх сурвалж. Тайлбарт тодорхой өөрөөр заагаагүй бол өөрийн дизайн зохиохгүй, зураг дээрхийг яг дага.\n".to_string()
+    };
+    format!(
+        r#"
+## Харагдах байдлыг шалгах (UI, дизайн, хэвлэх загварын ажилд заавал)
+Кодыг уншсанаар харагдах байдлыг баталгаажуулахгүй, үр дүнг зураг болгож өөрөө хар.
+1. Туршилтын script, түр файлаа зөвхөн `{dir}/` хавтаст бич. Repo дотор түр файл үүсгэхгүй.
+2. Өөрчилсөн загвар, компонентыг бодит кодоор нь дуудаж HTML гарга. Project-ийн alias import ажиллахгүй бол эх файлыг энэ хавтаст хуулж, import-ийг нь сольж ашигла.
+3. Зураг гарга: `import {{ htmlZuragBolgokh }} from "./zuragBolgokh.mjs"; await htmlZuragBolgokh(html, "{dir}/ur.png", {{ urgun: 794, undur: 1123 }});`
+4. `node {dir}/<script>.mjs` гэж яг энэ хэлбэрээр ажиллуулаад, гарсан PNG-г Read tool-оор нээж хар.
+{kharitsuulakh}
+Зураг гаргаж чадаагүй бол тайланд «нүдээр шалгаагүй» гэж шалтгаантай нь бич.
+"#
+    )
 }
 
 /// Өмнөх ээлжийн заавар, үр дүн
@@ -357,6 +425,7 @@ pub fn prompt_beltgey(a: &Ajil, bokhir: &[String]) -> String {
         )
     };
     let tuukh = tuukh_khesg(a);
+    let kharagdakh = kharagdakh_khesg(a);
     let nemelt = if a.nemelt_zaavar.trim().is_empty() {
         String::new()
     } else {
@@ -389,11 +458,12 @@ pub fn prompt_beltgey(a: &Ajil, bokhir: &[String]) -> String {
 ## Засвар хийж болох repo
 Эдгээр нь тухайн системийн бүх project — ажилд хамаарахыг нь олж засна, бусдыг нь хөндөхгүй.
 {repo_jagsaalt}
-{baikhgui}{umnukh_uurchlult}{bokhir}
+{baikhgui}{umnukh_uurchlult}{bokhir}{kharagdakh}
 Журам:
 1. {journam1} Холбогдох кодыг олж, одоогийн бүтэц, нэршил, хэв маягийг дагаж өөрчил.
 2. Тодорхойгүй зүйлд хамгийн боломжит тайлбарыг сонгож, түүнийгээ тайланд тэмдэглэ. Хүссэнээс хэтэрсэн рефактор хийхгүй.
 3. Холбогдох тест, lint, type check, build-ийг боломжтой бол ажиллуул. Унасан бол унасан гэж бич, давсан гэж бүү хэл.
+4. Bash команд бүрийг `cd`, `&&`, `;`, `|`-гүй ганц команд болгож ажиллуул, нийлмэл команд автоматаар татгалзагдана. Өөр repo-г `git -C <зам> status` хэлбэрээр шалга.
 
 Хатуу дүрэм:
 - git commit, push, deploy, production service restart хийхгүй. Өөрчлөлт зөвхөн local working tree-д үлдэнэ.
@@ -449,8 +519,9 @@ pub async fn ajilluulya(
     // Анхдагчаар зөвхөн cwd (эхний repo)-ийн CLAUDE.md ачаалагдана — --add-dir
     // repo-уудын CLAUDE.md-г ч ачаалуулж системийн мэдлэгийг бүрэн өгнө.
     cmd.env("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", "1");
-    cmd.arg("--allowedTools").arg(ZUVSHUURUL.join(","));
-    cmd.arg("--disallowedTools").arg(KHORIG.join(","));
+    cmd.arg("--allowedTools")
+        .arg(zuvshuurul_jagsaalt(&shalgalt_zam(ajil_dir)?).join(","));
+    cmd.arg("--disallowedTools").arg(khorig_jagsaalt().join(","));
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -625,9 +696,15 @@ mod tests {
                 nemelt_zaavar: "",
                 tuukh: &[],
                 umnukh_uurchlult: &[],
+                shalgalt_dir: "D:/data/a/shalgalt",
             },
             &["D:/Work/turees".into()],
         );
+        // Загвар зурагтай ажил үр дүнгээ зураг болгож харьцуулна
+        assert!(p.contains("node D:/data/a/shalgalt/<script>.mjs"));
+        // Windows-ийн үнэмлэхүй зам ESM import-д ажиллахгүй тул харьцангуй байна
+        assert!(p.contains("from \"./zuragBolgokh.mjs\"") && !p.contains("from \"D:/"));
+        assert!(p.contains("Хавсаргасан загвар зурагтай") && p.contains("таартал давт"));
         assert!(!p.contains("Өмнөх ээлжүүд") && !p.contains("ГОЛ ДААЛГАВАР"));
         assert!(p.contains("# QPay засвар") && p.contains("qpayShalgay 500"));
         assert!(p.contains("Систем: Zogsool"));
@@ -651,9 +728,11 @@ mod tests {
                 nemelt_zaavar: "",
                 tuukh: &[],
                 umnukh_uurchlult: &[],
+                shalgalt_dir: "D:/data/b/shalgalt",
             },
             &[],
         );
+        assert!(!p.contains("Хавсаргасан загвар зурагтай"));
         assert!(!p.contains("Хавсаргасан зураг") && !p.contains("буцаахгүй"));
         assert!(!p.contains("Систем:") && !p.contains("байхгүй тул"));
     }
@@ -685,6 +764,7 @@ mod tests {
                 nemelt_zaavar: "Үнэгүй машинд karte огт шалгахгүй",
                 tuukh: &tuukh,
                 umnukh_uurchlult: &["parking-v2".into()],
+                shalgalt_dir: "D:/data/c/shalgalt",
             },
             &[],
         );
@@ -717,9 +797,69 @@ mod tests {
 
     #[test]
     fn khorig_ni_zuvshuurulduu_baikhgui() {
-        for k in KHORIG {
-            assert!(!ZUVSHUURUL.contains(k), "{k}");
+        let zuvshuurul = zuvshuurul_jagsaalt("D:/data/a/shalgalt");
+        let khorig = khorig_jagsaalt();
+        for k in &khorig {
+            assert!(!zuvshuurul.contains(k), "{k}");
         }
-        assert!(KHORIG.contains(&"Bash(git push:*)") && KHORIG.contains(&"Bash(git commit:*)"));
+        for k in [
+            "Bash(git push:*)",
+            "Bash(git commit:*)",
+            "Bash(git -C * push)",
+            "Bash(git -C * push *)",
+            "Bash(git -C * commit *)",
+        ] {
+            assert!(khorig.iter().any(|x| x == k), "{k}");
+        }
+    }
+
+    #[test]
+    fn node_erkh_zuvkhun_shalgalt_khavtsand() {
+        let v = zuvshuurul_jagsaalt("D:/data/a/shalgalt");
+        let node: Vec<_> = v.iter().filter(|x| x.starts_with("Bash(node ")).collect();
+        assert!(node.iter().any(|x| *x == "Bash(node D:/data/a/shalgalt/*)"));
+        // Дурын `node <файл>`, `node -e` эрх нэмэгдээгүй
+        assert!(node
+            .iter()
+            .all(|x| x.starts_with("Bash(node --") || x.starts_with("Bash(node D:/data/a/shalgalt/")));
+    }
+
+    #[test]
+    fn shalgalt_khavtas_tuslakhtai_beldene() {
+        let root = std::env::temp_dir().join(format!("rcn-shalgalt-{}", std::process::id()));
+        let zam = shalgalt_beltgey(&root).unwrap();
+        assert!(!zam.contains('\\') && zam.ends_with("/shalgalt"));
+        let js = std::fs::read_to_string(format!("{zam}/zuragBolgokh.mjs")).unwrap();
+        assert!(js.contains("export async function htmlZuragBolgokh"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    /// Туслах бодитоор ажиллаж PNG гаргана (Edge/Chrome, node шаардлагатай)
+    #[test]
+    fn zurag_bolgokh_tuslakh_png_gargana() {
+        let root = std::env::temp_dir().join(format!("rcn-zurag-test-{}", std::process::id()));
+        let zam = shalgalt_beltgey(&root).unwrap();
+        let script = format!("{zam}/t.mjs");
+        std::fs::write(
+            &script,
+            format!(
+                "import {{ htmlZuragBolgokh }} from './zuragBolgokh.mjs';
+await htmlZuragBolgokh('<h1>Нэхэмжлэл</h1>', '{zam}/ur.png', {{ urgun: 300, undur: 200 }});
+"
+            ),
+        )
+        .unwrap();
+        let o = std::process::Command::new("node").arg(&script).output().unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        let png = std::fs::read(format!("{zam}/ur.png")).unwrap();
+        assert_eq!(&png[1..4], b"PNG");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn anhdagch_zagvar_opus() {
+        assert_eq!(ClaudeTokhirgoo::default().model, "opus");
+        let t: ClaudeTokhirgoo = toml::from_str("budget_usd = 1.0").unwrap();
+        assert_eq!(t.model, "opus");
     }
 }
