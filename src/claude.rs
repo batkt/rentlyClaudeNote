@@ -129,7 +129,7 @@ fn default_exe() -> String {
     "claude".into()
 }
 fn default_model() -> String {
-    "opus".into()
+    "claude-opus-5-5".into()
 }
 fn default_budget() -> f64 {
     5.0
@@ -858,8 +858,8 @@ await htmlZuragBolgokh('<h1>Нэхэмжлэл</h1>', '{zam}/ur.png', {{ urgun: 
 
     #[test]
     fn anhdagch_zagvar_opus() {
-        assert_eq!(ClaudeTokhirgoo::default().model, "opus");
+        assert_eq!(ClaudeTokhirgoo::default().model, "claude-opus-5-5");
         let t: ClaudeTokhirgoo = toml::from_str("budget_usd = 1.0").unwrap();
-        assert_eq!(t.model, "opus");
+        assert_eq!(t.model, "claude-opus-5-5");
     }
 }

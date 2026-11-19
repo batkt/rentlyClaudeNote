@@ -43,7 +43,7 @@ Read/Glob/Grep/Edit/Write, `git status/diff/log/show` (`git -C <repo>` хэлб�
 
 ## Дизайныг зурагтай харьцуулах
 
-Ажил бүрт `data/<ajilId>/shalgalt/` хавтас үүсэж, дотор нь `zuragBolgokh.mjs` туслах бичигдэнэ. Claude зөвхөн энэ хавтсан дахь script-ээ `node`-оор ажиллуулж, үр дүнг Edge/Chrome-оор PNG болгоод хавсаргасан загвар зурагтай таартал харьцуулна. Анхдагч загвар нь `opus` (`[claude] model`).
+Ажил бүрт `data/<ajilId>/shalgalt/` хавтас үүсэж, дотор нь `zuragBolgokh.mjs` туслах бичигдэнэ. Claude зөвхөн энэ хавтсан дахь script-ээ `node`-оор ажиллуулж, үр дүнг Edge/Chrome-оор PNG болгоод хавсаргасан загвар зурагтай таартал харьцуулна. Анхдагч загвар нь Opus 5.5 — `claude-opus-5-5` (`[claude] model`).
 
 `data/<ajilId>/` дотор `prompt.md`, татсан зургууд, `shalgalt/`, `claude.jsonl` (бүх stream event — аудит) хадгалагдана.
 
