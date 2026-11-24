@@ -50,3 +50,9 @@ bokhir_repo_zuvshuurukh = false
 # pull хийх эрхгүй). Цэвэр repo-г шинэчилж чадаагүй бол хуучирсан код дээр
 # ажиллаж merge зөрчил үүсгэхгүйн тулд ажил aldaa болно. Upstream-гүй branch-ийг алгасна.
 git_pull = true
+# Ажил амжилттай дуусахад service өөрөө Claude-ийн өөрчилсөн файлуудыг (зөвхөн
+# тэдгээрийг) commit + push хийх repo-ууд. Claude-д commit/push эрх өгөхгүй хэвээр.
+# Force push хийхгүй; remote урагшилсан бол нэг удаа rebase, зөрчилтэй бол commit
+# local-д үлдэж цонхонд ⚠ харагдана. Хоосон бол хүн гараар commit хийнэ.
+avtomat_push = []
+# avtomat_push = ["irtsBack", "irtsWeb"]

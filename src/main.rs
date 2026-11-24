@@ -1,5 +1,6 @@
 mod claude;
 mod commit;
+mod push;
 
 use chrono::Local;
 use reqwest::{Client, Method, StatusCode};
@@ -768,7 +769,7 @@ impl App {
             for ((ner, zam), tuluv) in repos.iter().zip(&tuluvuud) {
                 let mur = match (claude::git_pull(zam).await, tuluv) {
                     (Ok(claude::PullUr::Tatsan(n)), _) => format!("⬇ {ner}: git pull — {n} шинэ commit татлаа"),
-                    (Ok(claude::PullUr::Shine), _) => continue,
+                    (Ok(claude::PullUr::Shine), _) => format!("✓ {ner}: git pull — аль хэдийн хамгийн сүүлийн хувилбар"),
                     (Ok(claude::PullUr::UpstreamGui), _) => {
                         format!("⚠ {ner}: upstream branch тохируулаагүй тул git pull алгаслаа")
                     }
@@ -919,9 +920,42 @@ impl App {
                 g.repo_head.push((ner.clone(), h.trim().to_string()));
             }
         }
+
+        // avtomat_push repo-д амжилттай ажлын өөрчлөлтийг service commit + push хийнэ.
+        // repo_head-ийг commit-оос ӨМНӨ авсан тул commit_shalgay энэ commit-ийг
+        // `<суурь>..HEAD`-ээс олж ажлыг «шинэчлэлтэд орсон» болгоно.
+        let mut push_murnuud = Vec::new();
+        if ur.is_ok() {
+            for (ner, zam) in &repos {
+                if !push::idevkhtei(&self.config.claude.avtomat_push, ner) {
+                    continue;
+                }
+                let failuud = push::repo_failuud(&g.zasvarlasan, ner);
+                if failuud.is_empty() {
+                    continue;
+                }
+                let mur = match push::commit_push(ner, zam, &failuud, str_of(ajil, "garchig"), id).await {
+                    Ok(Some(m)) => m,
+                    Ok(None) => continue,
+                    Err(e) => format!("⚠ {ner}: автомат commit/push — {e}"),
+                };
+                log_write(&self.log, "INFO", &format!("{id}: {mur}"));
+                push_murnuud.push(mur);
+            }
+            if !push_murnuud.is_empty() {
+                if let Ok(mut b) = buf.lock() {
+                    b.extend(push_murnuud.iter().cloned());
+                }
+                self.yavts_ilgeey(id, &buf).await;
+            }
+        }
         match ur {
             Ok(u) => {
-                g.ur = Some(u.ur);
+                g.ur = Some(if push_murnuud.is_empty() {
+                    u.ur
+                } else {
+                    format!("{}\n\n---\n{}", u.ur, push_murnuud.join("\n"))
+                });
                 g.zardal_usd = u.zardal_usd;
                 Ok(g)
             }
@@ -1291,7 +1325,13 @@ mod tests {
         assert!(!c.claude.bokhir_repo_zuvshuurukh);
         // [claude] хэсэгтэй ч git_pull-ийг дурдаагүй бол анхдагчаар асаалттай
         assert!(c.claude.git_pull);
+        // Дурдаагүй бол автомат push хэнд ч хийхгүй
+        assert!(c.claude.avtomat_push.is_empty());
         assert_eq!(c.shalgakh_secs, 60);
+
+        let c: Config = toml::from_str("[claude]\navtomat_push = [\"irtsBack\", \"irtsWeb\"]").unwrap();
+        assert!(push::idevkhtei(&c.claude.avtomat_push, "irtsWeb"));
+        assert!(!push::idevkhtei(&c.claude.avtomat_push, "tureesBack"));
     }
 
     #[test]

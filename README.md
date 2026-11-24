@@ -35,6 +35,8 @@
 
 `git_pull = true` (анхдагч) үед ажил эхлэхийн өмнө **service өөрөө** repo бүрт `git pull --ff-only` хийнэ — Claude хамгийн сүүлийн код дээр ажиллаж, дараа нь таны `git pull` merge зөрчилтэй болохоос сэргийлнэ. Цэвэр repo-г шинэчилж чадаагүй бол (сүлжээ, салаалсан local commit) ажил `aldaa` болно. Өмнөх ээлжийн commit хийгдээгүй өөрчлөлттэй repo-д pull зөрчилтэй бол git юу ч өөрчлөхгүй тул ⚠ анхааруулаад үргэлжлүүлнэ. Upstream-гүй branch-ийг алгасна. Claude-д `git pull` эрх өгөхгүй (ажлын дунд код солигдохгүй).
 
+`[claude] avtomat_push`-д нэрлэсэн repo-д (жишээ нь `["irtsBack", "irtsWeb"]`) ажил **амжилттай** дуусахад service өөрөө Claude-ийн өөрчилсөн файлуудыг л `git add` → `git commit` (гарчиг = ажлын гарчиг) → `git push` хийнэ (`src/push.rs`). Хэрэглэгчийн өөрчлөлт, `.env*` commit-д орохгүй; урьдчилан stage хийсэн зүйл байвал commit хийхгүй. Force push хийхгүй — remote урагшилсан бол нэг удаа `pull --rebase --autostash`, зөрчилтэй бол rebase-ийг цуцалж commit local-д үлдэнэ. Үр дүн цонхны явц ба тайланд `⬆`/`⚠` мөрөөр харагдана. Бусад repo-д commit/push-ийг хүн хийсээр.
+
 `--add-dir` repo-уудын `CLAUDE.md` ч ачаалагдана (`CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`).
 
 ## Claude-ийн хамгаалалт

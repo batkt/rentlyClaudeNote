@@ -106,6 +106,10 @@ pub struct ClaudeTokhirgoo {
     /// Claude хуучирсан код дээр засаад дараа нь merge зөрчил үүсгэхээс сэргийлнэ.
     #[serde(default = "default_true")]
     pub git_pull: bool,
+    /// Ажил амжилттай дуусахад service өөрөө Claude-ийн өөрчилсөн файлыг commit +
+    /// push хийх repo-ууд (жишээ нь ["irtsBack", "irtsWeb"]). Хоосон бол аль нь ч биш.
+    #[serde(default)]
+    pub avtomat_push: Vec<String>,
 }
 
 impl Default for ClaudeTokhirgoo {
@@ -117,6 +121,7 @@ impl Default for ClaudeTokhirgoo {
             model: default_model(),
             bokhir_repo_zuvshuurukh: false,
             git_pull: true,
+            avtomat_push: Vec::new(),
         }
     }
 }
