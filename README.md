@@ -11,6 +11,7 @@
 | `noorog` | Бичиж байгаа — service авахгүй |
 | `shine` | «Claude-д илгээх» дарсан, хүлээгдэж байна |
 | `khiigdej` | Service авсан, Claude ажиллаж байна (цонхонд явц 10 сек тутам шинэчлэгдэнэ) |
+| `asuult` | Claude ажлын явцад таны шийдэх зүйлтэй тулгарч асуулт тавьсан — цонхонд хариулж «Хариулаад Claude-д илгээх» (эсвэл «Асуултгүй үргэлжлүүлэх») → `shine` |
 | `duussan` / `aldaa` | Үр дүн, өөрчлөгдсөн файлууд, зардал цонхонд харагдана. «Дахин ажиллуулах» → `shine` |
 | `tsutsalsan` | Цонхноос цуцалсан — service ажиллаж байсан бол Claude-г зогсооно |
 
@@ -22,6 +23,8 @@
 | `GET /claudeAjil?tuluv=shine` | Хүлээгдэж буй ажлууд (хуучнаас нь) |
 | `POST /claudeAjil/:id/avya` | `shine → khiigdej` atomic түгжилт. 409 бол өөр service авсан → алгасна |
 | `GET /zuragAvya/claudeAjil/<baiguullagiinId>/<id>` | Хавсаргасан зураг → `data/<ajilId>/zurag-N.png` |
+| `POST /claudeAjil/:id/asuult` | `khiigdej → asuult`: шинэ асуулт (хариулсан өмнөхүүд дээр нэмэгдэнэ), Claude-ийн тэмдэглэл (`oilgolt`), тэр хүртэлх өөрчлөлт, зардал |
+| `POST /claudeAjil/:id/khariult` | (цонх) хариулт эсвэл `algasakh` → `shine` |
 | `POST /claudeAjil/:id/yavts` | 15 сек тутам явцын мөрүүд; хариуны `tuluv = tsutsalsan` бол Claude-г зогсооно |
 | `POST /claudeAjil/:id/ur` | `duussan`/`aldaa`, Claude-ийн тайлан, `git status` мөрүүд, зардал |
 
@@ -39,9 +42,19 @@
 
 `--add-dir` repo-уудын `CLAUDE.md` ч ачаалагдана (`CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`).
 
+## Тодруулах асуулт (зөвхөн зайлшгүй үед)
+
+Claude ажлыг **шууд гүйцэтгэнэ** — тодорхой ажилд юу ч асуухгүй. Харин кодоос тодорхойлох боломжгүй, хэрэглэгчийн шийдэх зүйлтэй (бизнесийн дүрэм, хэд хэдэн зөв хувилбартай шийдэл, хамрах хүрээ г.м.) тулгарвал таамаглахгүй, зогсоод асуумж буцаана. Claude-ийн эцсийн хариу `--json-schema`-ээр `{ tailan, asuultuud }` бүтэцтэй ирнэ (≤4 асуулт, асуулт бүрт 2-4 сонголт, санал болгох сонголттой).
+
+- `asuultuud` хоосон → ажил `duussan`, `tailan` нь тайлан.
+- Асуулттай → ажил `asuult` төлөвт орно. `tailan` (юу олсон, юу хийсэн) `oilgolt`-д, тэр хүртэлх commit хийгдээгүй өөрчлөлт `zasvarlasan`-д хадгалагдана. Цонхонд хариулахад `shine` болж, Claude хариулсан асуултуудыг prompt-ийн «Тодруулга»-аас, тэмдэглэлээ «өмнөх тэмдэглэл»-ээс уншиж, өмнөх өөрчлөлтийнхөө дээр зогссон газраасаа үргэлжлүүлнэ. Шаардлагатай бол дахин асууж болно (хариулсан асуулт хадгалагдана). «Асуултгүй үргэлжлүүлэх» бол санал болгосон сонголтуудыг ашиглана.
+- Ажил дээр «Тодорхойгүй зүйл гарвал Claude надаас асууж болно»-г унтраавал schema асуулт зөвшөөрөхгүй (`maxItems: 0`) — Claude өөрөө хамгийн боломжит хувилбарыг сонгоно.
+- Асуулт тавьсан ажиллагааны зардал `asuultZardalUsd`-д нэмэгдэнэ. Автомат commit/push зөвхөн `duussan` үед.
+- `structured_output` ирээгүй бол ажил `aldaa` болно (өөрчлөлт `zasvarlasan`-д бүртгэгдэнэ).
+
 ## Claude-ийн хамгаалалт
 
-Read/Glob/Grep/Edit/Write, `git status/diff/log/show` (`git -C <repo>` хэлбэрээр ч), `node --test/--check`, `npm test`, `npm run lint/build`, `npx tsc/eslint` зөвшөөрөгдсөн. Хориотой: `git commit/push/pull/reset/checkout/switch/restore/clean/stash/rebase/merge/revert/cherry-pick/am/apply/config`, `npm install/publish`, `pm2`, WebFetch/WebSearch. `--max-budget-usd`, `timeout_min`. Өөрчлөлт зөвхөн working tree-д үлдэнэ — өөрөө хянаж commit эсвэл буцаана.
+Read/Glob/Grep/Edit/Write, `git status/diff/log/show` (`git -C <repo>` хэлбэрээр ч), `node --test/--check`, `npm test`, `npm run lint/build`, `npx tsc/eslint` зөвшөөрөгдсөн. Хориотой: `git commit/push/pull/reset/checkout/switch/restore/clean/stash/rebase/merge/revert/cherry-pick/am/apply/config`, `npm install/publish`, `pm2`, WebFetch/WebSearch. `--max-budget-usd`, `timeout_min`. `Skill` хэрэгсэл зөвшөөрөгдсөн тул `~/.claude/skills`-д суулгасан skill-үүдийг (tdd, diagnosing-bugs, codebase-design, ui-ux-pro-max г.м.) ашиглана; skill-ийн туслах script-ээс зөвхөн `SKILL_SCRIPTUUD`-д бүртгэсэнийг (`ui-ux-pro-max/scripts/search.py`, Python 3 шаардлагатай) үнэмлэхүй замаар нь ажиллуулна. Өөрчлөлт зөвхөн working tree-д үлдэнэ — өөрөө хянаж commit эсвэл буцаана.
 
 ## Дизайныг зурагтай харьцуулах
 

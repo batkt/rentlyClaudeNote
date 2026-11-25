@@ -491,8 +491,18 @@ fn angilakh(murnuud: &[String], umnukh: &HashSet<String>) -> RepoTuluv {
 /// Backend-ийн `tuukh`-ээс өмнөх ээлжүүд ба тэдгээрийн бүх `zasvarlasan` мөрийн
 /// нэгдлийг гаргана. Нэгдэл авах нь: дунд нэг ээлж эрт алдаа (жишээ нь bokhir)
 /// гарч zasvarlasan хоосон үлдсэн ч өмнөх ээлжийн өөрчлөлтийг таньсаар байна.
+/// Ажлын өөрийн `zasvarlasan`-ийг ч нэмнэ: Claude асуулт тавьж зогсохдоо хийсэн
+/// өөрчлөлт энд хадгалагдана (хариулахад хэвээр). Дахин ажиллуулах, нэмэлт
+/// ээлжид backend үүнийг хоослодог тул бусад үед хоосон.
 fn tuukh_unshikh(ajil: &Value) -> (Vec<claude::UmnukhEelj>, HashSet<String>) {
-    let mut murnuud = HashSet::new();
+    let mut murnuud: HashSet<String> = ajil
+        .get("zasvarlasan")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_string)
+        .collect();
     let eeljuud = ajil
         .get("tuukh")
         .and_then(Value::as_array)
@@ -536,6 +546,32 @@ struct Guitsetgel {
     /// Ажил дуусах үеийн repo бүрийн HEAD — zasvarlasan хожим commit хийгдсэн
     /// эсэхийг `<hash>..HEAD`-ээс хайхад суурь болно (commit::repo_shalgakh)
     repo_head: Vec<(String, String)>,
+}
+
+/// Ажлын нэг удаагийн гүйцэтгэл хэрхэн төгссөн
+enum Duusalt {
+    /// Claude ажлаа хийж дууссан → /ur (duussan)
+    Ur(Guitsetgel),
+    /// Claude тодруулах асуулт гаргасан → /asuult (хэрэглэгч хариулахыг хүлээнэ)
+    Asuult(usize),
+}
+
+/// Хэрэглэгчийн шийдэх зүйл гарвал Claude зогсоод асууж болох эсэх. Ажил дээр
+/// унтраагаагүй бол (хуучин ажилд талбар байхгүй — анхдагч true) асууж болно.
+fn asuukh_esekh(ajil: &Value) -> bool {
+    ajil.get("asuultAsuukh").and_then(Value::as_bool) != Some(false)
+}
+
+/// Хэрэглэгчийн хариулсан (эсвэл алгассан) асуултууд — prompt-ийн «Тодруулга».
+/// Хариулаагүй асуулт (`khariulsan` false) орохгүй.
+fn khariulsan_asuultuud(ajil: &Value) -> Vec<claude::Asuult> {
+    ajil.get("asuultuud")
+        .cloned()
+        .and_then(|v| serde_json::from_value::<Vec<claude::Asuult>>(v).ok())
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|a| a.khariulsan)
+        .collect()
 }
 
 /// Commit хийгдээгүй ажлуудыг хэдэн секунд тутам шалгах
@@ -656,7 +692,15 @@ impl App {
             &format!("Ажил эхэллээ: {id} «{}»", str_of(&ajil, "garchig")),
         );
         let (tuluv, g, aldaa) = match self.ajilluulya(&id, &ajil).await {
-            Ok(g) => ("duussan", g, None),
+            Ok(Duusalt::Asuult(n)) => {
+                log_write(
+                    &self.log,
+                    "INFO",
+                    &format!("Ажил {id}: {n} тодруулах асуулт — хэрэглэгчийн хариултыг хүлээнэ"),
+                );
+                return;
+            }
+            Ok(Duusalt::Ur(g)) => ("duussan", g, None),
             Err((e, g)) => ("aldaa", g, Some(e)),
         };
         match &aldaa {
@@ -692,7 +736,7 @@ impl App {
 
     /// Repo шалгах → зураг татах → Claude ажиллуулах. Алдаа гарсан ч тэр
     /// хүртэлх гүйцэтгэлийг (өөрчлөгдсөн файл) буцаана.
-    async fn ajilluulya(&self, id: &str, ajil: &Value) -> Result<Guitsetgel, (String, Guitsetgel)> {
+    async fn ajilluulya(&self, id: &str, ajil: &Value) -> Result<Duusalt, (String, Guitsetgel)> {
         let mut g = Guitsetgel {
             ur: None,
             zardal_usd: None,
@@ -834,6 +878,12 @@ impl App {
             Err(e) => return Err((e, g)),
         };
 
+        let zamuud: Vec<String> = repos.iter().map(|(_, z)| z.clone()).collect();
+        // Алгассан repo, git pull-ийн дүнг цонхны явцад эхэнд нь харуулна
+        let buf: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(
+            baikhgui_mur.into_iter().chain(pull_murnuud).collect(),
+        ));
+
         // Claude эхлэхээс өмнөх commit хийгдээгүй өөрчлөлтийн тамга — ажлын
         // дараа хэрэглэгчийн урьдчилан байсан өөрчлөлтийг zasvarlasan-аас ялгана
         let mut umnu_tamga = Vec::with_capacity(repos.len());
@@ -848,6 +898,11 @@ impl App {
             }
         }
 
+        // Claude ажлыг шууд гүйцэтгэнэ; хэрэглэгчийн шийдэх зүйлтэй тулгарвал
+        // зогсоод асуумж буцаана (доор /asuult). Хариулсан асуултууд нь prompt-ийн
+        // «Тодруулга» хэсэгт орно.
+        let asuukh = asuukh_esekh(ajil);
+        let khariulsan = khariulsan_asuultuud(ajil);
         let prompt = claude::prompt_beltgey(
             &claude::Ajil {
                 garchig: str_of(ajil, "garchig"),
@@ -860,45 +915,31 @@ impl App {
                 tuukh: &tuukh,
                 umnukh_uurchlult: &umnukh_uurchlult,
                 shalgalt_dir: &shalgalt_dir,
+                asuukh,
+                oilgolt: str_of(ajil, "oilgolt"),
+                asuultuud: &khariulsan,
             },
             &bokhir,
         );
         let _ = fs::write(ajil_dir.join("prompt.md"), &prompt);
 
-        // Claude — явцыг YAVTS_SECS тутам backend руу илгээж, цуцалсан бол зогсооно
-        let zamuud: Vec<String> = repos.iter().map(|(_, z)| z.clone()).collect();
-        let tokhirgoo = self.config.claude.clone();
-        let stream_path = ajil_dir.join("claude.jsonl");
-        // Алгассан repo-г цонхны явцад эхэнд нь харуулна
-        let buf: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(
-            baikhgui_mur.into_iter().chain(pull_murnuud).collect(),
-        ));
-        let log = self.log.clone();
-        let ur = {
-            let buf2 = buf.clone();
-            let yavts = move |m: &str| {
-                log_write(&log, "CLAUDE", m);
-                if let Ok(mut b) = buf2.lock() {
-                    b.push(m.to_string());
-                }
-            };
-            let claude_fut =
-                claude::ajilluulya(&tokhirgoo, &prompt, &zamuud, &ajil_dir, &stream_path, yavts);
-            tokio::pin!(claude_fut);
-            let mut interval = tokio::time::interval(Duration::from_secs(YAVTS_SECS));
-            interval.tick().await;
-            loop {
-                tokio::select! {
-                    r = &mut claude_fut => break r,
-                    _ = interval.tick() => {
-                        if self.yavts_ilgeey(id, &buf).await.as_deref() == Some("tsutsalsan") {
-                            // claude_fut drop болоход процесс kill_on_drop-оор зогсоно
-                            break Err("Цонхноос цуцалсан".into());
-                        }
-                    }
-                }
-            }
-        };
+        let ur = self
+            .claude_khyanaltai(
+                id,
+                &buf,
+                asuukh,
+                &prompt,
+                &zamuud,
+                &ajil_dir,
+                &ajil_dir.join("claude.jsonl"),
+            )
+            .await
+            .and_then(|u| {
+                let butets = u
+                    .butets
+                    .ok_or("Claude JSON хариу (structured_output) буцаасангүй")?;
+                Ok((claude::ajliin_ur_tseverley(&butets)?, u.zardal_usd))
+            });
         self.yavts_ilgeey(id, &buf).await;
 
         for ((ner, zam), umnu) in repos.iter().zip(&umnu_tamga) {
@@ -921,45 +962,114 @@ impl App {
             }
         }
 
+        let (ajliin_ur, zardal_usd) = match ur {
+            Ok(r) => r,
+            Err(e) => return Err((e, g)),
+        };
+
+        // Хэрэглэгчийн шийдэх зүйлтэй тулгарсан — асуумжийг цонх руу илгээж
+        // хариултыг хүлээнэ. Энэ удаагийн (хагас) өөрчлөлтийг zasvarlasan-д
+        // хадгална: хариулсны дараах ээлж үүнийг Claude-ийнх гэж таньж үргэлжлүүлнэ.
+        if asuukh && !ajliin_ur.asuultuud.is_empty() {
+            let n = ajliin_ur.asuultuud.len();
+            if let Ok(mut b) = buf.lock() {
+                b.push(format!("❓ Claude {n} асуулт тавьлаа — таны хариултыг хүлээж байна"));
+            }
+            // /asuult нь khiigdej-ээс гарах тул явцыг өмнө нь илгээнэ
+            self.yavts_ilgeey(id, &buf).await;
+            let body = json!({
+                "oilgolt": ajliin_ur.tailan,
+                "asuultuud": ajliin_ur.asuultuud,
+                "zardalUsd": zardal_usd,
+                "zasvarlasan": g.zasvarlasan,
+                "repoHead": g.repo_head.iter().map(|(repo, hash)| json!({ "repo": repo, "hash": hash })).collect::<Vec<_>>(),
+            });
+            return match self.api.post(&format!("/claudeAjil/{id}/asuult"), body).await {
+                Ok(_) => Ok(Duusalt::Asuult(n)),
+                Err(ApiAldaa::Zurchil) => Err(("Цонхноос цуцалсан".into(), g)),
+                Err(e) => Err((format!("Асуулт илгээж чадсангүй: {e}"), g)),
+            };
+        }
+
         // avtomat_push repo-д амжилттай ажлын өөрчлөлтийг service commit + push хийнэ.
         // repo_head-ийг commit-оос ӨМНӨ авсан тул commit_shalgay энэ commit-ийг
         // `<суурь>..HEAD`-ээс олж ажлыг «шинэчлэлтэд орсон» болгоно.
         let mut push_murnuud = Vec::new();
-        if ur.is_ok() {
-            for (ner, zam) in &repos {
-                if !push::idevkhtei(&self.config.claude.avtomat_push, ner) {
-                    continue;
-                }
-                let failuud = push::repo_failuud(&g.zasvarlasan, ner);
-                if failuud.is_empty() {
-                    continue;
-                }
-                let mur = match push::commit_push(ner, zam, &failuud, str_of(ajil, "garchig"), id).await {
-                    Ok(Some(m)) => m,
-                    Ok(None) => continue,
-                    Err(e) => format!("⚠ {ner}: автомат commit/push — {e}"),
-                };
-                log_write(&self.log, "INFO", &format!("{id}: {mur}"));
-                push_murnuud.push(mur);
+        for (ner, zam) in &repos {
+            if !push::idevkhtei(&self.config.claude.avtomat_push, ner) {
+                continue;
             }
-            if !push_murnuud.is_empty() {
-                if let Ok(mut b) = buf.lock() {
-                    b.extend(push_murnuud.iter().cloned());
-                }
-                self.yavts_ilgeey(id, &buf).await;
+            let failuud = push::repo_failuud(&g.zasvarlasan, ner);
+            if failuud.is_empty() {
+                continue;
             }
+            let mur = match push::commit_push(ner, zam, &failuud, str_of(ajil, "garchig"), id).await {
+                Ok(Some(m)) => m,
+                Ok(None) => continue,
+                Err(e) => format!("⚠ {ner}: автомат commit/push — {e}"),
+            };
+            log_write(&self.log, "INFO", &format!("{id}: {mur}"));
+            push_murnuud.push(mur);
         }
-        match ur {
-            Ok(u) => {
-                g.ur = Some(if push_murnuud.is_empty() {
-                    u.ur
-                } else {
-                    format!("{}\n\n---\n{}", u.ur, push_murnuud.join("\n"))
-                });
-                g.zardal_usd = u.zardal_usd;
-                Ok(g)
+        if !push_murnuud.is_empty() {
+            if let Ok(mut b) = buf.lock() {
+                b.extend(push_murnuud.iter().cloned());
             }
-            Err(e) => Err((e, g)),
+            self.yavts_ilgeey(id, &buf).await;
+        }
+        g.ur = Some(if push_murnuud.is_empty() {
+            ajliin_ur.tailan
+        } else {
+            format!("{}\n\n---\n{}", ajliin_ur.tailan, push_murnuud.join("\n"))
+        });
+        g.zardal_usd = zardal_usd;
+        Ok(Duusalt::Ur(g))
+    }
+
+
+    /// Claude-г ажиллуулна — явцыг YAVTS_SECS тутам backend руу илгээж,
+    /// цонхноос цуцалсан бол зогсооно.
+    #[allow(clippy::too_many_arguments)]
+    async fn claude_khyanaltai(
+        &self,
+        id: &str,
+        buf: &Arc<Mutex<Vec<String>>>,
+        asuukh: bool,
+        prompt: &str,
+        zamuud: &[String],
+        ajil_dir: &Path,
+        stream_path: &Path,
+    ) -> Result<claude::ClaudeUr, String> {
+        let log = self.log.clone();
+        let buf2 = buf.clone();
+        let yavts = move |m: &str| {
+            log_write(&log, "CLAUDE", m);
+            if let Ok(mut b) = buf2.lock() {
+                b.push(m.to_string());
+            }
+        };
+        let claude_fut = claude::ajilluulya(
+            &self.config.claude,
+            asuukh,
+            prompt,
+            zamuud,
+            ajil_dir,
+            stream_path,
+            yavts,
+        );
+        tokio::pin!(claude_fut);
+        let mut interval = tokio::time::interval(Duration::from_secs(YAVTS_SECS));
+        interval.tick().await;
+        loop {
+            tokio::select! {
+                r = &mut claude_fut => break r,
+                _ = interval.tick() => {
+                    if self.yavts_ilgeey(id, buf).await.as_deref() == Some("tsutsalsan") {
+                        // claude_fut drop болоход процесс kill_on_drop-оор зогсоно
+                        break Err("Цонхноос цуцалсан".into());
+                    }
+                }
+            }
         }
     }
 
@@ -1463,6 +1573,52 @@ mod tests {
         assert_eq!(c.zereg_max, 1);
         let c: Config = toml::from_str("zereg_max = 3").unwrap();
         assert_eq!(c.zereg_max, 3);
+    }
+
+    #[test]
+    fn config_jishee_unshigdana() {
+        let c: Config = toml::from_str(include_str!("../config.example.toml")).unwrap();
+        assert_eq!(c.claude.model, "claude-opus-5-5");
+    }
+
+    #[test]
+    fn asuukh_esekh_anhdagch_true() {
+        // Шинэ болон хуучин (талбаргүй) ажил — шаардлагатай бол асууж болно
+        assert!(asuukh_esekh(&json!({})));
+        assert!(asuukh_esekh(&json!({ "asuultAsuukh": true })));
+        assert!(!asuukh_esekh(&json!({ "asuultAsuukh": false })));
+    }
+
+    #[test]
+    fn khariulsan_asuultuud_unshina() {
+        let asuult = |a: &str, khariulsan: bool| {
+            json!({
+                "_id": "x",
+                "asuult": a,
+                "tovch": "Хуваах",
+                "olonSongolt": false,
+                "songoltuud": [{ "ner": "Тэнцүү", "tailbar": "", "sanal": true }, { "ner": "Талбайгаар" }],
+                "khariu": if khariulsan { json!(["Талбайгаар"]) } else { json!([]) },
+                "busad": "",
+                "khariulsan": khariulsan
+            })
+        };
+        let a = khariulsan_asuultuud(&json!({ "asuultuud": [asuult("1?", true), asuult("2?", false)] }));
+        // Хариулаагүй асуулт prompt-д орохгүй
+        assert_eq!(a.len(), 1);
+        assert_eq!(a[0].asuult, "1?");
+        assert_eq!(a[0].khariu, vec!["Талбайгаар".to_string()]);
+        assert!(a[0].songoltuud[0].sanal && !a[0].songoltuud[1].sanal);
+        assert!(khariulsan_asuultuud(&json!({})).is_empty());
+    }
+
+    #[test]
+    fn asuult_tavisan_uurchlultiig_claude_iinkh_gej_tanina() {
+        // Claude асуулт тавихдаа хийсэн өөрчлөлт ажлын zasvarlasan-д хадгалагдана —
+        // хариулсны дараах ажиллагаанд bokhir биш, өмнөх ээлжийнх гэж үзнэ
+        let (_, umnukh) = tuukh_unshikh(&json!({ "zasvarlasan": ["turees: M src/a.js"] }));
+        let murnuud = status_murnuud("turees", " M src/a.js\n");
+        assert_eq!(angilakh(&murnuud, &umnukh), RepoTuluv::UmnukhEeljiin);
     }
 
     #[test]
